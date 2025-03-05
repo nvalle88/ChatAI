@@ -1,0 +1,62 @@
+﻿/* messages.css */
+.message {
+    margin: 10px 0;
+    padding: 12px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+
+.user-message {
+    background-color: #007bff;
+    color: white;
+    margin-left: auto;
+    text-align: right;
+}
+
+.ai-message {
+    background-color: #e9ecef;
+    color: #212529;
+    margin-right: auto;
+}
+
+.message:last-child {
+    margin-bottom: 20px;
+}
+
+.message strong {
+    font-weight: bold;
+}
+
+.message em {
+    font-style: italic;
+}
+
+.message code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', Courier, monospace;
+}
+
+/* Typing animation (optional, can be re-added if needed) */
+.ai-message.typing::after {
+    content: "▋";
+    color: #666;
+    animation: typing 1s infinite;
+}
+
+@keyframes typing {
+    0% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.4;
+    }
+}
