@@ -2,27 +2,47 @@
 
 namespace ChatAI.Controllers
 {
+    using Azure.Core;
     using ChatAI.Models;
+    using ChatAI.Models.Database;
+    using ChatAI.Services;
     using Microsoft.AspNetCore.Mvc;
+    using Microsoft.EntityFrameworkCore;
+    using System;
     using System.Net.Http;
     using System.Text;
     using System.Text.Json;
+    using System.Threading.Tasks;
 
     [Route("[controller]")]
     public class ChatController : Controller
     {
         private const string AZURE_URL = "";
         private const string AZURE_TOKEN = "";
-        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IOpenAiService _iOpenAiService;
+        private readonly AgenteAiContext _agenteAiContext;
 
-        public ChatController(IHttpClientFactory httpClientFactory)
+
+
+        public ChatController(IOpenAiService openAiService, AgenteAiContext agenteAiContext)
         {
-            _httpClientFactory = httpClientFactory;
+            _iOpenAiService = openAiService;
+            _agenteAiContext = agenteAiContext ?? throw new ArgumentNullException(nameof(agenteAiContext));
+
         }
 
         public IActionResult Index()
         {
+
             return View();
+        }
+
+        [HttpGet("api/assistant/GetAssistants")]
+        public async Task<IActionResult> GetAssistant()
+        {
+            var assistants = await _agenteAiContext.AssistantConfigs.ToListAsync();
+            return Json(assistants);
+
         }
 
         public class ChatAI
@@ -36,31 +56,61 @@ namespace ChatAI.Controllers
         {
             try
             {
-                var client = _httpClientFactory.CreateClient();
-                var resuqetAi = new ChatAI
+                // Validar el modelo de entrada
+                if (request == null || string.IsNullOrEmpty(request.version))
                 {
-                    chat_history = new List<string>(),
-                    query = request.Prompt,
-                };
+                    return Json(new { success = false, error = "Invalid request" });
+                }
+                var assist = _agenteAiContext.AssistantConfigs.Include(x => x.ApiHeaders).Include(x => x.ApiEndpoints)
+                    .Where(x => x.AssistantId == request.version)
+                    .FirstOrDefault();
 
-                var content = new StringContent(
-                    JsonSerializer.Serialize(resuqetAi),
-                    Encoding.UTF8,
-                    "application/json"
-                );
+                var headers = assist.ApiHeaders.ToList();
 
-                string deploymentModel = GetDeploymentModel(request.version);
-                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {AZURE_TOKEN}");
-                client.DefaultRequestHeaders.Add("azureml-model-deployment", deploymentModel);
+                var endPoint = assist.ApiEndpoints.Where(x => x.TypeName.Equals("CreateThread")).FirstOrDefault();
+                var url = $"{endPoint.PathTemplate}{endPoint.ApiVersion}";
 
-                var response = await client.PostAsync(AZURE_URL, content);
-                response.EnsureSuccessStatusCode();
+                var thread = await _iOpenAiService.CreateThreadAsync(request.Prompt, url, headers);
 
-                var responseData = await response.Content.ReadAsStringAsync();
-                var chatResponse = JsonSerializer.Deserialize<ChatResponse>(responseData);
+                endPoint = assist.ApiEndpoints.Where(x => x.TypeName.Equals("CreateRun")).FirstOrDefault();
+                url = $"{endPoint.PathTemplate.Replace("{thread_}", thread.id)}{endPoint.ApiVersion}";
 
-                // Solo retornamos el 'reply' para la vista
-                return Json(new { success = true, response = chatResponse.reply });
+                var run = await _iOpenAiService.CreateRunAsync(url, assist.AssistantId, endPoint.AdditionalInstructions ?? string.Empty, headers);
+
+                endPoint = assist.ApiEndpoints.Where(x => x.TypeName.Equals("GetThreadMessages")).FirstOrDefault();
+                url = $"{endPoint.PathTemplate.Replace("{thread_}", thread.id)}{endPoint.ApiVersion}";
+
+                ResponseMessage responseMessagge = null;
+                Datum message = null;
+
+                int maxRetries = 30; 
+                int attempts = 0;
+                do
+                {
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(500));
+                        responseMessagge = await _iOpenAiService.GetThreadMessagesAsync(url, headers);
+                        message = responseMessagge.data.FirstOrDefault(x => x.run_id == run.id);
+                        attempts++;
+                    }
+                    catch (Exception)
+                    {
+                        attempts++;
+                    }
+
+                } while (message?.content==null || message.content.Count==0 );
+
+                if (message.content.Count >= 0)
+                {
+                    // Obtener los mensajes cuando el run esté completado
+                    return Json(new { success = true, response = message.content?.FirstOrDefault()?.text.value});
+
+                }
+
+
+                return Json(new { success = true, response = "Run status is {runResponse.Status}, unable to fetch messages." });
+                return null;
             }
             catch (Exception ex)
             {

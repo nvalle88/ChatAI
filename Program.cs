@@ -1,3 +1,10 @@
+
+using ChatAI.Models.Database;
+using ChatAI.Services;
+using Core;
+using Microsoft.ApplicationInsights;
+using Microsoft.EntityFrameworkCore;
+
 namespace ChatAI
 {
     public class Program
@@ -12,7 +19,21 @@ namespace ChatAI
             // Agregar controladores con vistas
             builder.Services.AddControllersWithViews();
 
+            builder.Services.AddScoped<IOpenAiService,OpenAiService>();
+
+            builder.Services.AddDbContext<AgenteAiContext>(options =>
+               options.UseSqlServer(builder.Configuration.GetConnectionString("AgenteAIDatabase")));
+
+
+            builder.Services.AddApplicationInsightsTelemetry();
+
             var app = builder.Build();
+
+            var telemetryClient = app.Services.GetRequiredService<TelemetryClient>();
+            LoggerService.Configure(telemetryClient);
+
+            app.UseMiddleware<LoggingMiddleware>();
+            app.UseMiddleware<IdTransaccionMiddleware>();
 
             // Configurar el pipeline de middleware
             if (!app.Environment.IsDevelopment())

@@ -12,41 +12,49 @@
 </head>
 <body>
     <main role="main">
-        <div id="messages" class="chat-messages">
-            <!-- Messages will be appended here -->
-        </div>
         @RenderBody()
     </main>
-    <footer class="chat-input-container">
-        <div class="chat-input">
-            <textarea id="messageInput" rows="1" placeholder="How can Grok help?"></textarea>
-            <button class="btn-grok" onclick="sendMessage()">
-                <i class="fas fa-paper-plane me-2"></i> Send
-            </button>
-            <button class="stop-button" id="stopButton" onclick="stopTyping()">
-                <i class="fas fa-stop me-2"></i> Stop
-            </button>
-            <button class="action-btn" id="deepSearchBtn" disabled>
-                <i class="fas fa-search"></i> DeepSearch
-            </button>
-            <button class="action-btn" id="thinkBtn" disabled>
-                <i class="fas fa-lightbulb"></i> Think
-            </button>
-            <div class="version-dropdown">
-                <button class="btn dropdown-toggle" type="button" id="versionDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="fas fa-cog me-2"></i> Grok 3
-                </button>
-                <ul class="dropdown-menu" aria-labelledby="versionDropdown">
-                    <li><a class="dropdown-item" href="#" onclick="setVersion('v1')">laura-1</a></li>
-                    <li><a class="dropdown-item" href="#" onclick="setVersion('v2')">laura-2</a></li>
-                    <li><a class="dropdown-item" href="#" onclick="setVersion('v3')">Grok 3</a></li>
-                </ul>
-            </div>
-        </div>
-    </footer>
+    
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+                $.ajax({
+            url: 'Chat/api/assistant/GetAssistants',
+            type: 'GET',
+            dataType: 'json',
+            success: function (data) {
+                const ul = $("#versionList");
+                ul.empty();
+
+                if (data && data.length > 0) {
+                    data.forEach(function (item) {
+                        console.log(item); // <- Agrega esto para ver qué trae cada item
+
+                        const li = $("<li></li>");
+                        const a = $("<a></a>")
+                            .attr("href", "#")
+                            .addClass("dropdown-item")
+                            .text(item.name) // <- Aquí deberías ver el texto correcto
+                            .on("click", function () {
+                                setVersion(item.assistantId, item.name); // <- Aquí se lo pasas
+                            });
+
+                        li.append(a);
+                        ul.append(li);
+                    });
+                } else {
+                    ul.append("<li>No assistants available</li>");
+                }
+            },
+            error: function (error) {
+                console.error("Error loading assistants:", error);
+            }
+        });
+
+
+        
+        
+        
         let isTyping = false;
         let typingTimeout;
         let dotCount = 0;
@@ -137,10 +145,10 @@
             }, 500);
         }
 
-        function setVersion(version) {
+        function setVersion(version,versionName) {
             currentVersion = version;
-            const buttonText = getModelName(version);
-            versionButton.innerHTML = `<i class="fas fa-cog me-2"></i> ${buttonText}`;
+                   const versionButton = document.getElementById("versionDropdown");
+        versionButton.innerHTML = `<i class="fas fa-cog me-2"></i> ${versionName}`;
         }
 
         function getModelName(version) {
